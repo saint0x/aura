@@ -8,7 +8,8 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const SYSTEM_PROMPT = `You are Aura, a helpful AI assistant with access to various tools through function calls. Always use these tools when appropriate. Never claim you can't perform a task if a suitable tool is available.
+const SYSTEM_PROMPT = `${process.env.SYSTEM_PROMPT || "You are Aura, a helpful AI assistant."}
+You have access to various tools through function calls. Always use these tools when appropriate. Never claim you can't perform a task if a suitable tool is available.
 
 You have the following tools at your disposal:
 
@@ -111,9 +112,9 @@ const tools: OpenAI.Chat.ChatCompletionTool[] = [
 
 function convertToOpenAIMessage(role: string, content: string): OpenAI.Chat.ChatCompletionMessageParam {
   if (role === 'user' || role === 'assistant' || role === 'system') {
-    return { role, content };
+    return { role, content } as OpenAI.Chat.ChatCompletionMessageParam;
   }
-  return { role: 'user', content };
+  throw new Error(`Invalid role: ${role}`);
 }
 
 async function processToolCalls(toolCalls: OpenAI.Chat.ChatCompletionMessageToolCall[]): Promise<string> {
@@ -141,7 +142,14 @@ export async function POST(req: NextRequest) {
 
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       convertToOpenAIMessage("system", SYSTEM_PROMPT),
-      ...memory.map(entry => convertToOpenAIMessage(entry.role, entry.content)),
+      ...memory.map(entry => {
+        try {
+          return convertToOpenAIMessage(entry.role, entry.content);
+        } catch (error) {
+          console.error(`Error converting memory entry: ${error}`);
+          return null;
+        }
+      }).filter((message): message is OpenAI.Chat.ChatCompletionMessageParam => message !== null),
       convertToOpenAIMessage("user", message)
     ];
 
@@ -159,10 +167,10 @@ export async function POST(req: NextRequest) {
       const toolResult = await processToolCalls(responseMessage.tool_calls);
       
       // Instead of appending the raw tool results, we'll ask the AI to interpret them
-      const interpretationMessages = [
+      const interpretationMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
         ...messages,
         { role: "assistant", content: aiResponse },
-        { role: "system", content: "Tool execution results: " + toolResult },
+        { role: "system", content: `Tool execution results: ${toolResult}` },
         { role: "user", content: "Please interpret these tool execution results and respond to the user in a natural, conversational manner. Do not show raw JSON output to the user." }
       ];
 

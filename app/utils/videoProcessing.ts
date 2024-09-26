@@ -1,29 +1,32 @@
 import ffmpeg from 'fluent-ffmpeg';
+import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
 
-export const extractFrames = async (videoPath: string): Promise<Buffer[]> => {
-  const frames: Buffer[] = [];
-  const tempDir = path.join(process.cwd(), 'temp', 'frames');
-  
-  if (!fs.existsSync(tempDir)) {
-    fs.mkdirSync(tempDir, { recursive: true });
+const mkdir = promisify(fs.mkdir);
+
+export async function extractFramesFromVideo(videoPath: string, outputDir: string, frameRate: number = 1): Promise<string[]> {
+  const videoName = path.basename(videoPath, path.extname(videoPath));
+  const framesDir = path.join(outputDir, 'frames');
+
+  try {
+    await mkdir(framesDir, { recursive: true });
+  } catch (error) {
+    console.error('Error creating frames directory:', error);
+    throw error;
   }
 
-  return new Promise((resolve, reject) => {
+  return new Promise<string[]>((resolve, reject) => {
     ffmpeg(videoPath)
+      .outputOptions('-vf', `fps=${frameRate}`)
+      .output(path.join(framesDir, `${videoName}-frame-%d.png`))
+      .on('error', (err: Error) => reject(err))
       .on('end', () => {
-        // Read all frame files
-        const frameFiles = fs.readdirSync(tempDir).slice(-60); // Get the most recent 60 frames
-        const buffers = frameFiles.map(file => fs.readFileSync(path.join(tempDir, file)));
-        resolve(buffers);
+        fs.readdir(framesDir, (err, files) => {
+          if (err) reject(err);
+          else resolve(files.map(file => path.join(framesDir, file)));
+        });
       })
-      .on('error', (err) => reject(err))
-      .screenshots({
-        count: 60, // Adjust this count as needed
-        folder: tempDir,
-        size: '320x240',
-        filename: '%b-frame-%i.png',
-      });
+      .run();
   });
-};
+}
