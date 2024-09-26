@@ -1,0 +1,12 @@
+{
+  "screen_capture": [
+    "When asked to take a picture or screenshot of the screen, use the captureScreenshot function. This function doesn't require any parameters.",
+    "If requested to analyze the screen content, first use captureScreenshot function, then describe the captured image based on the returned base64 image data."
+  ],
+  "file_operations": [
+    "To create a file, use the createFile function with the specified path and content.",
+    "For reading file contents, employ the readFile function with the given file path.",
+    "When asked to delete a file, utilize the deleteFile function with the file path.",
+    "To list files in a directory, use the listFiles function with the specified directory path."
+  ]
+}
