@@ -1,22 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { analyzeImage } from '../../../utils/visionUtils';
+import { analyzeImage } from '@/app/utils/visionUtils';
 
-export const runtime = 'edge';
-export const maxDuration = 60; // This sets a 60-second timeout, adjust as needed
-
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const { image } = await req.json();
-
-    if (!image) {
-      return NextResponse.json({ error: 'Image data is required' }, { status: 400 });
+    const body = await request.json();
+    
+    if (!body.image_url) {
+      return NextResponse.json(
+        { success: false, error: 'image_url is required' },
+        { status: 400 }
+      );
     }
 
-    const { analysis, logs } = await analyzeImage(image);
-
-    return NextResponse.json({ analysis, logs });
+    const prompt = body.prompt || 'Describe what you see in this image in detail.';
+    const result = await analyzeImage(body.image_url, prompt);
+    
+    return NextResponse.json({ 
+      success: true, 
+      data: result 
+    });
   } catch (error) {
-    console.error('Error in image analysis:', error);
-    return NextResponse.json({ error: 'Failed to analyze image' }, { status: 500 });
+    console.error('Error in vision analysis:', error);
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to analyze image' 
+      },
+      { status: 500 }
+    );
   }
 }

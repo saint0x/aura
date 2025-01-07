@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const ELEVENLABS_API_KEY = 'sk_7186a5f3ad8ab61b713992ed5f9bb3c8a9970f98fb6e3812';
-const ELEVENLABS_VOICE_ID = 'WLIAiq6GQcUImAzxzLJT';
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
+const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID;
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,6 +9,11 @@ export async function POST(req: NextRequest) {
 
     if (!text) {
       return NextResponse.json({ error: 'Text is required' }, { status: 400 });
+    }
+
+    if (!ELEVENLABS_API_KEY || !ELEVENLABS_VOICE_ID) {
+      console.error('Missing ElevenLabs configuration');
+      return NextResponse.json({ error: 'TTS service not configured' }, { status: 500 });
     }
 
     const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}/stream`, {

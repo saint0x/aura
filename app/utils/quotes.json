@@ -1,12 +1,494 @@
 {
-  "screen_capture": [
-    "When asked to take a picture or screenshot of the screen, use the captureScreenshot function. This function doesn't require any parameters.",
-    "If requested to analyze the screen content, first use captureScreenshot function, then describe the captured image based on the returned base64 image data."
-  ],
-  "file_operations": [
-    "To create a file, use the createFile function with the specified path and content.",
-    "For reading file contents, employ the readFile function with the given file path.",
-    "When asked to delete a file, utilize the deleteFile function with the file path.",
-    "To list files in a directory, use the listFiles function with the specified directory path."
-  ]
+  "file_operations": {
+    "ReadFileTool": {
+      "description": "Reads the contents of a file from the filesystem",
+      "natural_triggers": [
+        "show me the contents of",
+        "read the file",
+        "what's in the file",
+        "display the contents of",
+        "open and read",
+        "let me see the file",
+        "check what's written in",
+        "get the content of",
+        "view the file",
+        "show me what's inside"
+      ],
+      "examples": [
+        {
+          "user_input": "Can you show me what's in the config.json file?",
+          "tool_call": {
+            "name": "read_file",
+            "parameters": {
+              "relative_workspace_path": "config.json",
+              "should_read_entire_file": true,
+              "start_line_one_indexed": 1,
+              "end_line_one_indexed_inclusive": 1000
+            }
+          }
+        },
+        {
+          "user_input": "Read lines 10-20 of the server.ts file",
+          "tool_call": {
+            "name": "read_file",
+            "parameters": {
+              "relative_workspace_path": "server.ts",
+              "should_read_entire_file": false,
+              "start_line_one_indexed": 10,
+              "end_line_one_indexed_inclusive": 20
+            }
+          }
+        },
+        {
+          "user_input": "I need to see the first 50 lines of app.tsx",
+          "tool_call": {
+            "name": "read_file",
+            "parameters": {
+              "relative_workspace_path": "app.tsx",
+              "should_read_entire_file": false,
+              "start_line_one_indexed": 1,
+              "end_line_one_indexed_inclusive": 50
+            }
+          }
+        }
+      ]
+    },
+    "BrowseFilesystemTool": {
+      "description": "Browse directories and list their contents",
+      "natural_triggers": [
+        "show me what's in the directory",
+        "list the contents of",
+        "browse the folder",
+        "what files are in",
+        "show me the files in",
+        "list files in",
+        "browse directory",
+        "explore folder",
+        "show directory contents",
+        "list folder contents"
+      ],
+      "examples": [
+        {
+          "user_input": "Show me what's in the Desktop folder",
+          "tool_call": {
+            "name": "browse_filesystem",
+            "parameters": {
+              "path": "/Users/username/Desktop"
+            }
+          }
+        },
+        {
+          "user_input": "List the contents of my Documents folder",
+          "tool_call": {
+            "name": "browse_filesystem",
+            "parameters": {
+              "path": "/Users/username/Documents"
+            }
+          }
+        }
+      ]
+    },
+    "WriteFileTool": {
+      "description": "Writes content to a file in the filesystem",
+      "natural_triggers": [
+        "create a file",
+        "write to file",
+        "save this to",
+        "update the file",
+        "modify the file",
+        "save the following",
+        "make a new file",
+        "add this to the file",
+        "put this in a file",
+        "create and write to"
+      ],
+      "examples": [
+        {
+          "user_input": "Create a new file called hello.txt with the content 'Hello, World!'",
+          "tool_call": {
+            "name": "write_file",
+            "parameters": {
+              "relative_workspace_path": "hello.txt",
+              "content": "Hello, World!"
+            }
+          }
+        },
+        {
+          "user_input": "Update the package.json file to include a new dependency",
+          "tool_call": {
+            "name": "write_file",
+            "parameters": {
+              "relative_workspace_path": "package.json",
+              "content": "{\"dependencies\": {\"new-package\": \"^1.0.0\"}}"
+            }
+          }
+        },
+        {
+          "user_input": "Save this configuration to config/settings.json",
+          "tool_call": {
+            "name": "write_file",
+            "parameters": {
+              "relative_workspace_path": "config/settings.json",
+              "content": "{\"theme\": \"dark\", \"language\": \"en\"}"
+            }
+          }
+        }
+      ]
+    },
+    "browse_filesystem": {
+      "description": "Browse directories and list their contents with full filesystem access",
+      "natural_triggers": [
+        "list files in directory",
+        "show folder contents",
+        "browse directory",
+        "what's in this folder",
+        "show files in path"
+      ],
+      "examples": [
+        {
+          "input": "List the contents of my Desktop folder",
+          "output": "I'll browse your Desktop directory and show you its contents",
+          "tool_call": {
+            "name": "browse_filesystem",
+            "parameters": {
+              "path": "/Users/saint/Desktop"
+            }
+          }
+        },
+        {
+          "input": "What files are in my Documents folder?",
+          "output": "I'll check your Documents directory and list all files and folders",
+          "tool_call": {
+            "name": "browse_filesystem",
+            "parameters": {
+              "path": "/Users/saint/Documents"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "screen_operations": {
+    "CaptureScreenTool": {
+      "description": "Captures the screen content as an image",
+      "natural_triggers": [
+        "take a screenshot",
+        "capture the screen",
+        "save what's on screen",
+        "grab the screen",
+        "capture current view",
+        "screenshot this",
+        "take a picture of the screen",
+        "save this view",
+        "capture this window",
+        "snap the screen"
+      ],
+      "examples": [
+        {
+          "user_input": "Take a screenshot of the entire screen",
+          "tool_call": {
+            "name": "capture_screen",
+            "parameters": {
+              "region": null,
+              "format": "png",
+              "quality": 100
+            }
+          }
+        },
+        {
+          "user_input": "Capture the top-left quarter of the screen",
+          "tool_call": {
+            "name": "capture_screen",
+            "parameters": {
+              "region": {
+                "x": 0,
+                "y": 0,
+                "width": 960,
+                "height": 540
+              },
+              "format": "png",
+              "quality": 100
+            }
+          }
+        },
+        {
+          "user_input": "Take a low-quality screenshot to save space",
+          "tool_call": {
+            "name": "capture_screen",
+            "parameters": {
+              "region": null,
+              "format": "jpg",
+              "quality": 50
+            }
+          }
+        }
+      ]
+    }
+  },
+  "voice_operations": {
+    "TranscribeAudioTool": {
+      "description": "Transcribes audio content to text using Whisper",
+      "natural_triggers": [
+        "transcribe this audio",
+        "convert speech to text",
+        "what does this audio say",
+        "get text from audio",
+        "transcribe voice",
+        "write down what's said",
+        "turn this recording into text",
+        "extract text from audio",
+        "convert this recording",
+        "make a transcript"
+      ],
+      "examples": [
+        {
+          "user_input": "Transcribe the audio file recording.mp3",
+          "tool_call": {
+            "name": "transcribe_audio",
+            "parameters": {
+              "audio_path": "recording.mp3",
+              "language": "en"
+            }
+          }
+        },
+        {
+          "user_input": "Convert this Spanish voice memo to text",
+          "tool_call": {
+            "name": "transcribe_audio",
+            "parameters": {
+              "audio_path": "memo.wav",
+              "language": "es"
+            }
+          }
+        },
+        {
+          "user_input": "What's being said in this Japanese audio clip?",
+          "tool_call": {
+            "name": "transcribe_audio",
+            "parameters": {
+              "audio_path": "clip.mp3",
+              "language": "ja"
+            }
+          }
+        }
+      ]
+    },
+    "SynthesizeVoiceTool": {
+      "description": "Converts text to speech using ElevenLabs",
+      "natural_triggers": [
+        "speak this text",
+        "convert text to speech",
+        "say this out loud",
+        "read this aloud",
+        "vocalize this",
+        "generate speech from",
+        "make this into speech",
+        "turn this into audio",
+        "speak these words",
+        "read this to me"
+      ],
+      "examples": [
+        {
+          "user_input": "Read this text aloud: Hello, how are you today?",
+          "tool_call": {
+            "name": "synthesize_voice",
+            "parameters": {
+              "text": "Hello, how are you today?",
+              "voice_id": "default",
+              "stability": 0.75,
+              "similarity_boost": 0.75
+            }
+          }
+        },
+        {
+          "user_input": "Say this with a British accent: Lovely weather we're having!",
+          "tool_call": {
+            "name": "synthesize_voice",
+            "parameters": {
+              "text": "Lovely weather we're having!",
+              "voice_id": "british-male",
+              "stability": 0.75,
+              "similarity_boost": 0.75
+            }
+          }
+        },
+        {
+          "user_input": "Generate a clear and stable voice saying: Welcome to our application",
+          "tool_call": {
+            "name": "synthesize_voice",
+            "parameters": {
+              "text": "Welcome to our application",
+              "voice_id": "default",
+              "stability": 0.9,
+              "similarity_boost": 0.8
+            }
+          }
+        }
+      ]
+    }
+  },
+  "memory_operations": {
+    "StoreMemoryTool": {
+      "description": "Stores data in the agent's memory",
+      "natural_triggers": [
+        "remember this",
+        "store this information",
+        "save this for later",
+        "keep track of",
+        "make a note of",
+        "memorize this",
+        "keep this in mind",
+        "save this information",
+        "record this",
+        "add this to memory"
+      ],
+      "examples": [
+        {
+          "user_input": "Remember that my favorite color is blue",
+          "tool_call": {
+            "name": "store_memory",
+            "parameters": {
+              "content": "User's favorite color is blue",
+              "type": "preference",
+              "metadata": {
+                "category": "personal_info",
+                "subcategory": "preferences"
+              }
+            }
+          }
+        },
+        {
+          "user_input": "Save this task for later: Review the project proposal",
+          "tool_call": {
+            "name": "store_memory",
+            "parameters": {
+              "content": "Review the project proposal",
+              "type": "task",
+              "metadata": {
+                "category": "work",
+                "priority": "high"
+              }
+            }
+          }
+        },
+        {
+          "user_input": "Keep track of this setting: dark mode enabled",
+          "tool_call": {
+            "name": "store_memory",
+            "parameters": {
+              "content": "User prefers dark mode",
+              "type": "setting",
+              "metadata": {
+                "category": "preferences",
+                "subcategory": "ui"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "RetrieveMemoryTool": {
+      "description": "Retrieves stored data from the agent's memory",
+      "natural_triggers": [
+        "what do you remember about",
+        "recall information about",
+        "find stored data on",
+        "get memory of",
+        "retrieve information about",
+        "what did I tell you about",
+        "what do you know about",
+        "fetch the information about",
+        "get the details of",
+        "show me what you remember about"
+      ],
+      "examples": [
+        {
+          "user_input": "What do you remember about my favorite color?",
+          "tool_call": {
+            "name": "retrieve_memory",
+            "parameters": {
+              "query": "favorite color",
+              "type": "preference",
+              "limit": 1
+            }
+          }
+        },
+        {
+          "user_input": "Show me all the tasks you've stored",
+          "tool_call": {
+            "name": "retrieve_memory",
+            "parameters": {
+              "type": "task",
+              "limit": 10
+            }
+          }
+        },
+        {
+          "user_input": "What settings have I configured?",
+          "tool_call": {
+            "name": "retrieve_memory",
+            "parameters": {
+              "type": "setting",
+              "limit": 20
+            }
+          }
+        }
+      ]
+    },
+    "SearchMemoryTool": {
+      "description": "Searches for specific data within the agent's memory",
+      "natural_triggers": [
+        "search for",
+        "find mentions of",
+        "look up",
+        "search memory for",
+        "find instances of",
+        "search through memories for",
+        "find any reference to",
+        "locate information about",
+        "find anything related to",
+        "search your memory for"
+      ],
+      "examples": [
+        {
+          "user_input": "Search for any mentions of project deadlines",
+          "tool_call": {
+            "name": "search_memory",
+            "parameters": {
+              "query": "project deadline",
+              "metadata": {
+                "category": "work"
+              },
+              "limit": 5
+            }
+          }
+        },
+        {
+          "user_input": "Find all conversations about machine learning",
+          "tool_call": {
+            "name": "search_memory",
+            "parameters": {
+              "query": "machine learning",
+              "type": "conversation",
+              "limit": 10
+            }
+          }
+        },
+        {
+          "user_input": "Look for any preferences related to notifications",
+          "tool_call": {
+            "name": "search_memory",
+            "parameters": {
+              "query": "notifications",
+              "type": "preference",
+              "metadata": {
+                "category": "settings"
+              },
+              "limit": 5
+            }
+          }
+        }
+      ]
+    }
+  }
 }

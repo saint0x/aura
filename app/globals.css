@@ -31,3 +31,111 @@ body {
     text-wrap: balance;
   }
 }
+
+/* Markdown Viewer Styles */
+.markdown-viewer {
+  @apply text-gray-100;
+}
+
+.markdown-viewer pre {
+  @apply bg-gray-800 rounded-lg overflow-x-auto;
+}
+
+.markdown-viewer code {
+  @apply font-mono text-sm;
+}
+
+.markdown-viewer p code {
+  @apply bg-gray-800 px-1 rounded text-gray-200;
+}
+
+.markdown-viewer blockquote {
+  @apply border-l-4 border-gray-600 pl-4 italic my-4;
+}
+
+.markdown-viewer table {
+  @apply w-full border-collapse my-4;
+}
+
+.markdown-viewer th,
+.markdown-viewer td {
+  @apply border border-gray-700 px-4 py-2;
+}
+
+.markdown-viewer th {
+  @apply bg-gray-800;
+}
+
+.markdown-viewer img {
+  @apply max-w-full h-auto rounded-lg my-4;
+}
+
+.markdown-viewer a {
+  @apply text-blue-400 hover:text-blue-300 underline;
+}
+
+.markdown-viewer ul {
+  @apply list-disc pl-6 my-4;
+}
+
+.markdown-viewer ol {
+  @apply list-decimal pl-6 my-4;
+}
+
+.markdown-viewer li {
+  @apply mb-1;
+}
+
+.markdown-viewer hr {
+  @apply border-gray-700 my-8;
+}
+
+/* Syntax highlighting theme overrides */
+.markdown-viewer pre > code {
+  @apply text-sm !important;
+}
+
+/* Loading animation */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: .5;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Scrollbar styles */
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+.scrollbar-thumb-gray-700::-webkit-scrollbar-thumb {
+  background-color: #374151;
+  border-radius: 0.25rem;
+}
+
+.scrollbar-track-gray-900::-webkit-scrollbar-track {
+  background-color: #111827;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #111827;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #374151;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #4B5563;
+}

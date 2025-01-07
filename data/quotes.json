@@ -1,0 +1,67 @@
+{
+  "categories": {
+    "system_operations": {
+      "name": "System Operations",
+      "description": "Tools for monitoring and analyzing system hardware and resources",
+      "examples": [
+        {
+          "trigger": "What's my CPU usage?",
+          "response": "Let me check your CPU usage with the system tool.",
+          "metadata": {
+            "tool": "system",
+            "command": "cpu"
+          }
+        },
+        {
+          "trigger": "Show me detailed system information",
+          "response": "I'll get comprehensive information about your system.",
+          "metadata": {
+            "tool": "system",
+            "command": "all",
+            "detailed": true
+          }
+        },
+        {
+          "trigger": "How much memory is available?",
+          "response": "I'll check your system's memory usage.",
+          "metadata": {
+            "tool": "system",
+            "command": "memory"
+          }
+        },
+        {
+          "trigger": "Check disk space",
+          "response": "I'll analyze your disk space usage.",
+          "metadata": {
+            "tool": "system",
+            "command": "disk"
+          }
+        },
+        {
+          "trigger": "Show network information",
+          "response": "I'll retrieve your network interface information.",
+          "metadata": {
+            "tool": "system",
+            "command": "network"
+          }
+        },
+        {
+          "trigger": "What's my system's uptime?",
+          "response": "I'll check how long your system has been running.",
+          "metadata": {
+            "tool": "system",
+            "command": "info"
+          }
+        },
+        {
+          "trigger": "Monitor process usage",
+          "response": "I'll check the current process resource usage.",
+          "metadata": {
+            "tool": "system",
+            "command": "process"
+          }
+        }
+      ]
+    }
+  }
+} 
