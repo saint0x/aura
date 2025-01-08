@@ -490,5 +490,121 @@
         }
       ]
     }
+  },
+  "tool_chaining": {
+    "description": "Examples of complex operations requiring multiple tools",
+    "natural_triggers": [
+      "duplicate this file",
+      "find and copy",
+      "search and replace",
+      "analyze and report",
+      "backup and modify",
+      "find and update",
+      "search and duplicate",
+      "locate and process",
+      "scan and transform",
+      "identify and copy"
+    ],
+    "examples": [
+      {
+        "user_input": "Find and duplicate the zap-rs file from my desktop",
+        "tool_sequence": [
+          {
+            "name": "browse_filesystem",
+            "parameters": {
+              "path": "/Users/saint/Desktop",
+              "pattern": "zap-rs"
+            },
+            "purpose": "Locate the zap-rs file",
+            "requires_verification": true,
+            "next_action": {
+              "tool": "duplicate_file",
+              "message": "File found, proceeding with duplication"
+            }
+          },
+          {
+            "name": "duplicate_file",
+            "parameters": {
+              "source": "{previous_result.path}",
+              "destination": "{previous_result.path}_copy"
+            },
+            "purpose": "Create a copy of the file",
+            "requires_verification": true
+          }
+        ]
+      },
+      {
+        "user_input": "Search for config files and backup them up",
+        "tool_sequence": [
+          {
+            "name": "search_files",
+            "parameters": {
+              "pattern": "*.config",
+              "recursive": true
+            },
+            "purpose": "Find all configuration files",
+            "requires_verification": true,
+            "next_action": {
+              "tool": "backup_files",
+              "message": "Found config files, creating backups"
+            }
+          },
+          {
+            "name": "backup_files",
+            "parameters": {
+              "files": "{previous_result.matches}",
+              "backup_dir": "backups"
+            },
+            "purpose": "Create backups of found files",
+            "requires_verification": true
+          }
+        ]
+      }
+    ]
+  },
+  "verification_examples": {
+    "description": "Examples of tool verification and error handling",
+    "examples": [
+      {
+        "scenario": "File operation verification",
+        "steps": [
+          {
+            "tool": "write_file",
+            "verification": {
+              "checks": [
+                "File exists after write",
+                "Content matches expected",
+                "Permissions are correct"
+              ],
+              "error_handling": {
+                "file_exists": "Backup existing file",
+                "permission_denied": "Request elevated permissions",
+                "disk_full": "Clean up temp files first"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "scenario": "Search and modify",
+        "steps": [
+          {
+            "tool": "search_files",
+            "verification": {
+              "checks": [
+                "Search pattern is valid",
+                "At least one match found",
+                "Matches are accessible"
+              ],
+              "error_handling": {
+                "no_matches": "Expand search criteria",
+                "invalid_pattern": "Suggest pattern correction",
+                "access_denied": "List inaccessible locations"
+              }
+            }
+          }
+        ]
+      }
+    ]
   }
 }

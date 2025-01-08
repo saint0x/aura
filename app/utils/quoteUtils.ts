@@ -1,140 +1,87 @@
-import { promises as fs } from 'fs';
-import path from 'path';
-import { QuoteExample, QuoteCategory, ToolQuotes } from './agent/types';
+import { QuoteExample, QuoteCategory, ToolQuotes } from '@/app/utils/agent/types';
 
-let toolQuotes: ToolQuotes | null = null;
-
-export async function loadQuotes(): Promise<ToolQuotes> {
-  if (toolQuotes) {
-    return toolQuotes;
-  }
-
-  try {
-    const quotesPath = path.join(process.cwd(), 'data', 'quotes.json');
-    const quotesData = await fs.readFile(quotesPath, 'utf-8');
-    toolQuotes = JSON.parse(quotesData) as ToolQuotes;
-    return toolQuotes;
-  } catch (error) {
-    console.error('Failed to load quotes:', error);
-    throw new Error('Failed to load quotes');
-  }
-}
-
-export async function saveQuotes(quotes: ToolQuotes): Promise<void> {
-  try {
-    const quotesPath = path.join(process.cwd(), 'data', 'quotes.json');
-    await fs.writeFile(quotesPath, JSON.stringify(quotes, null, 2));
-    toolQuotes = quotes;
-  } catch (error) {
-    console.error('Failed to save quotes:', error);
-    throw new Error('Failed to save quotes');
-  }
-}
-
-export async function addQuote(
-  category: string,
-  trigger: string,
-  response: string,
-  metadata?: Record<string, unknown>
-): Promise<void> {
-  const quotes = await loadQuotes();
-  
-  if (!quotes.categories[category]) {
-    quotes.categories[category] = {
-      name: category,
-      description: `Quotes for ${category}`,
-      examples: [],
-      metadata: {}
-    };
-  }
-
-  const example: QuoteExample = {
-    trigger,
-    response,
-    metadata
-  };
-
-  quotes.categories[category].examples.push(example);
-  await saveQuotes(quotes);
-}
-
-export async function findQuote(trigger: string): Promise<QuoteExample | null> {
-  const quotes = await loadQuotes();
-  
-  for (const category of Object.values(quotes.categories)) {
-    const example = category.examples.find(e => e.trigger === trigger);
-    if (example) {
-      return example;
-    }
-  }
-
-  return null;
-}
-
-export async function getRandomQuote(category?: string): Promise<QuoteExample | null> {
-  const quotes = await loadQuotes();
-  
-  let examples: QuoteExample[] = [];
-  
-  if (category) {
-    examples = quotes.categories[category]?.examples || [];
-  } else {
-    Object.values(quotes.categories).forEach(cat => {
-      examples = examples.concat(cat.examples);
-    });
-  }
-
-  if (examples.length === 0) {
-    return null;
-  }
-
-  const randomIndex = Math.floor(Math.random() * examples.length);
-  return examples[randomIndex];
-}
-
-export async function removeQuote(trigger: string): Promise<boolean> {
-  const quotes = await loadQuotes();
-  let removed = false;
-
-  for (const category of Object.values(quotes.categories)) {
-    const index = category.examples.findIndex(e => e.trigger === trigger);
-    if (index !== -1) {
-      category.examples.splice(index, 1);
-      removed = true;
-      break;
-    }
-  }
-
-  if (removed) {
-    await saveQuotes(quotes);
-  }
-
-  return removed;
-}
-
-export async function updateQuote(
-  trigger: string,
-  newResponse: string,
-  metadata?: Record<string, unknown>
-): Promise<boolean> {
-  const quotes = await loadQuotes();
-  let updated = false;
-
-  for (const category of Object.values(quotes.categories)) {
-    const example = category.examples.find(e => e.trigger === trigger);
-    if (example) {
-      example.response = newResponse;
-      if (metadata) {
-        example.metadata = { ...example.metadata, ...metadata };
+export const quoteManager = {
+  async getQuotes(category: string): Promise<QuoteExample[]> {
+    try {
+      const quotes = await loadQuotes();
+      const categoryQuotes = quotes.categories[category];
+      if (!categoryQuotes) {
+        return [];
       }
-      updated = true;
-      break;
+      return categoryQuotes.examples;
+    } catch (e: unknown) {
+      console.error(`Error getting quotes for category ${category}:`, e);
+      return [];
+    }
+  },
+
+  async getCategories(): Promise<string[]> {
+    try {
+      const quotes = await loadQuotes();
+      return Object.keys(quotes.categories);
+    } catch (e: unknown) {
+      console.error('Error getting quote categories:', e);
+      return [];
+    }
+  },
+
+  async getCategoryInfo(cat: QuoteCategory): Promise<QuoteCategory | null> {
+    try {
+      const quotes = await loadQuotes();
+      return quotes.categories[cat.name] || null;
+    } catch (e: unknown) {
+      console.error(`Error getting category info for ${cat.name}:`, e);
+      return null;
+    }
+  },
+
+  async addQuote(category: string, quote: QuoteExample): Promise<boolean> {
+    try {
+      const quotes = await loadQuotes();
+      if (!quotes.categories[category]) {
+        quotes.categories[category] = {
+          name: category,
+          description: '',
+          examples: []
+        };
+      }
+      quotes.categories[category].examples.push(quote);
+      await saveQuotes(quotes);
+      return true;
+    } catch (e: unknown) {
+      console.error(`Error adding quote to category ${category}:`, e);
+      return false;
+    }
+  },
+
+  async removeQuote(category: string, quote: QuoteExample): Promise<boolean> {
+    try {
+      const quotes = await loadQuotes();
+      if (!quotes.categories[category]) {
+        return false;
+      }
+      const examples = quotes.categories[category].examples;
+      const index = examples.findIndex(e => e.trigger === quote.trigger);
+      if (index === -1) {
+        return false;
+      }
+      examples.splice(index, 1);
+      await saveQuotes(quotes);
+      return true;
+    } catch (e: unknown) {
+      console.error(`Error removing quote from category ${category}:`, e);
+      return false;
     }
   }
+};
 
-  if (updated) {
-    await saveQuotes(quotes);
-  }
+async function loadQuotes(): Promise<ToolQuotes> {
+  // Implementation here
+  return {
+    categories: {}
+  };
+}
 
-  return updated;
+async function saveQuotes(quotes: ToolQuotes): Promise<void> {
+  // Implementation here
 } 

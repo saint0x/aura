@@ -1,6 +1,5 @@
-import { Message as BaseMessage } from '@/app/types/chat';
+import { ReasoningEngine } from './reasoningUtils';
 
-// Quote Types
 export interface QuoteExample {
   trigger: string;
   response: string;
@@ -11,16 +10,11 @@ export interface QuoteCategory {
   name: string;
   description: string;
   examples: QuoteExample[];
-  metadata?: Record<string, unknown>;
 }
 
 export interface ToolQuotes {
   categories: Record<string, QuoteCategory>;
-  metadata?: Record<string, unknown>;
 }
-
-// Memory Types
-export type MemoryType = 'message' | 'response' | 'pattern' | 'context' | 'reasoning_step' | 'conclusion';
 
 export interface MemoryEntry {
   id: string;
@@ -29,154 +23,130 @@ export interface MemoryEntry {
   context_id: string;
   metadata: Record<string, unknown>;
   timestamp: string;
-  parent_id?: string; // For linking reasoning steps
-  reasoning_chain_id?: string; // For grouping related reasoning steps
 }
 
+export type MemoryType = 'pattern' | 'fact' | 'reasoning_step' | 'conclusion' | 'command' | 'context' | 'response';
+
 export interface ReasoningStep {
-  type: 'observation' | 'thought' | 'action' | 'result';
+  stepNumber: number;
+  type: 'observation' | 'thought' | 'action' | 'result' | 'decision';
   content: string;
+  description: string;
+  explanation?: string;
+  observation?: string;
+  decision?: string;
   metadata?: Record<string, unknown>;
+  timestamp?: number;
+  id?: string;
 }
 
 export interface ReasoningChain {
   id: string;
-  context_id: string;
+  context_id?: string;
   steps: ReasoningStep[];
   conclusion?: string;
-  confidence?: number;
   metadata?: Record<string, unknown>;
 }
 
-export interface Pattern {
-  id: string;
-  type: string;
-  content: string;
-  pattern: string;
-  last_observed: string;
-  timestamp: string;
-  confidence: number;
-  metadata: Record<string, unknown>;
-}
-
-export interface SavedContext {
-  id: string;
-  name: string;
-  description: string;
-  type: string;
-  data: Record<string, unknown>;
-  updated_at: string;
-}
-
-export interface Operation {
-  id: string;
-  type: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
-  created_at: string;
-  updated_at: string;
-  metadata: Record<string, unknown>;
-}
-
 export interface MemoryState {
-  recent_operations: Operation[];
+  recent_operations: Array<{
+    id: string;
+    type: string;
+    status: string;
+    created_at: string;
+    updated_at: string;
+    metadata: Record<string, unknown>;
+  }>;
   active_contexts: string[];
   user_preferences: Record<string, unknown>;
-  conversation_history: Message[];
-  learned_patterns: Pattern[];
-  saved_contexts: SavedContext[];
+  conversation_history: Array<{
+    id: string;
+    role: string;
+    content: string;
+    timestamp: string;
+  }>;
+  learned_patterns: Array<{
+    id: string;
+    type: string;
+    content: string;
+    pattern: string;
+    last_observed: string;
+    timestamp: string;
+    confidence: number;
+    metadata: Record<string, unknown>;
+  }>;
+  saved_contexts: Array<{
+    id: string;
+    name: string;
+    description: string;
+    type: string;
+    data: Record<string, unknown>;
+    updated_at: string;
+  }>;
 }
 
-// System State Types
-export interface SystemState {
-  timezone: string;
-  current_time: string;
-  session_id: string;
+export interface AgentContext {
   user_id: string;
-  permissions: string[];
+  session_id: string;
+  memory_state: MemoryState;
+  current_task?: string;
+  metadata: Record<string, unknown>;
 }
 
-export interface ResourceState {
-  memory_usage: number;
-  storage_usage: number;
-  api_calls_remaining: number;
-  cpu_usage: number;
-  active_processes: string[];
+export interface Message {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: string;
+  metadata?: Record<string, unknown>;
 }
 
-export interface Context {
-  system: SystemState;
-  memory: MemoryState;
-  resources: ResourceState;
+export interface AgentMessage extends Message {
+  reasoning_chain?: ReasoningChain;
+  tool_executions?: ToolExecution[];
 }
 
-// Message Types
-export interface Message extends BaseMessage {
-  name?: string;
-  function_call?: FunctionCall;
-  tool_calls?: ToolCall[];
+export interface AgentResponse {
+  message: AgentMessage;
+  memory_updates?: MemoryEntry[];
+  context_updates?: Partial<AgentContext>;
 }
 
-// Tool Types
-export type ToolValidationRule = 
-  | TypeValidationRule
-  | EnumValidationRule
-  | RangeValidationRule
-  | PatternValidationRule
-  | CustomValidationRule
-  | LengthValidationRule;
-
-export interface TypeValidationRule {
-  type: 'type';
-  expected: string;
-}
-
-export interface EnumValidationRule {
-  type: 'enum';
-  values: string[];
-}
-
-export interface RangeValidationRule {
-  type: 'range';
-  min: number;
-  max: number;
-}
-
-export interface LengthValidationRule {
-  type: 'length';
-  min: number;
-  max: number;
-}
-
-export interface PatternValidationRule {
-  type: 'pattern';
-  regex: RegExp;
-}
-
-export interface CustomValidationRule {
-  type: 'custom';
+export interface ToolValidationRule {
+  type: 'type' | 'enum' | 'range' | 'pattern' | 'custom';
+  expected?: string;
+  values?: unknown[];
+  min?: number;
+  max?: number;
+  pattern?: string;
   message?: string;
-  validate: (value: unknown) => boolean;
 }
 
 export interface ToolParameter {
   name: string;
-  type: string;
+  type: 'string' | 'number' | 'boolean' | 'object' | 'array';
   description: string;
   required: boolean;
   validation?: ToolValidationRule[];
   schema?: ToolParameter[];
 }
 
+export interface ToolParameterDefinition {
+  type: string;
+  description: string;
+  required?: boolean;
+  enum?: string[];
+  schema?: ToolParameter[];
+}
+
 export interface ToolMetadata {
-  properties: Record<string, {
-    name: string;
-    type: string;
-    description: string;
-    required: boolean;
-    validation?: ToolValidationRule[];
-    schema?: ToolParameter[];
-  }>;
+  name: string;
+  description: string;
+  category: string;
+  version: string;
+  parameters: Record<string, ToolParameterDefinition>;
   required: string[];
+  examples: ToolExample[];
 }
 
 export interface ToolExample {
@@ -187,38 +157,106 @@ export interface ToolExample {
 }
 
 export interface Tool {
-  readonly name: string;
-  readonly description: string;
-  readonly version: string;
-  readonly category: string;
-  readonly parameters: ToolParameter[];
-  readonly metadata: ToolMetadata;
-  readonly examples: ToolExample[];
-  handler(params: Record<string, unknown>): Promise<unknown>;
+  name: string;
+  description: string;
+  version: string;
+  category: string;
+  parameters: ToolParameter[];
+  metadata: ToolMetadata;
+  examples: ToolExample[];
+  handler(args: Record<string, unknown>): Promise<unknown>;
+  setContext(context: ToolContext): void;
+  execute(args: Record<string, unknown>): Promise<unknown>;
 }
 
 export interface ToolRegistry {
-  register: (tool: Tool) => void;
-  get: (name: string) => Tool | undefined;
-  list: (category?: string) => Tool[];
-  validate: (name: string, params: Record<string, unknown>) => Promise<boolean>;
-  execute: (name: string, params: Record<string, unknown>) => Promise<unknown>;
+  register(tool: Tool): void;
+  get(name: string): Tool | undefined;
+  list(): Tool[];
+  validate(toolName: string, args: Record<string, unknown>): Promise<boolean>;
+  [key: string]: Tool | any;
 }
 
 export interface ToolContext {
-  user_id: string;
+  contextId: string;
+  chainId?: string;
+  sessionId: string;
+  permissions: Record<string, boolean>;
+  metadata?: Record<string, unknown>;
+}
+
+export interface NextAction {
+  tool: string;
+  args: Record<string, unknown>;
+  message?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ToolResult {
+  success: boolean;
+  result?: unknown;
+  error?: string;
+  chainId?: string;
+  completed?: boolean;
+  reasoningSteps?: ThoughtStep[];
+  nextAction?: NextAction;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ToolExecution {
+  tool: string;
+  args: Record<string, unknown>;
+  result: ToolResult;
+  timestamp: string;
+}
+
+export interface ToolVerifier {
+  preExecute?: (args: Record<string, unknown>) => Promise<{ success: boolean; message: string }>;
+  postExecute?: (args: Record<string, unknown>, result: unknown) => Promise<{ success: boolean; message: string }>;
+  customChecks?: Array<(args: Record<string, unknown>, result?: unknown) => Promise<{ success: boolean; message: string }>>;
+}
+
+export interface SystemState {
+  status: 'running' | 'stopped' | 'error';
+  memory_usage: NodeJS.MemoryUsage;
+  uptime: number;
+  error?: string;
+  timezone: string;
+  current_time: string;
   session_id: string;
+  user_id: string;
   permissions: string[];
-  metadata: Record<string, unknown>;
 }
 
-export interface ToolCall {
+export interface ResourceState {
+  cpu_usage: number;
+  memory_available: number;
+  disk_space: number;
+  network_status: 'connected' | 'disconnected';
+  memory_usage: string;
+  storage_usage: string;
+  api_calls_remaining: number;
+  active_processes: string[];
+}
+
+export interface ThoughtStep {
   id: string;
-  type: 'function';
-  function: FunctionCall;
+  type: 'analysis' | 'plan' | 'observation' | 'decision';
+  content: string;
+  timestamp: number;
+  metadata?: Record<string, unknown>;
 }
 
-export interface FunctionCall {
+export interface Command {
+  id: string;
   name: string;
-  arguments: string;
+  command: string;
+  category: string;
+  description: string;
+  parameters: Record<string, unknown>;
+  aliases: string[];
+  examples?: string[];
+  metadata?: Record<string, unknown>;
+  created_at: number;
+  updated_at: number;
 } 

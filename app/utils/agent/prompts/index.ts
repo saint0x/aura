@@ -1,5 +1,6 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { ThoughtStep } from '../types';
 
 // Function to extract a prompt section from PROMPTS.md
 function extractPrompt(content: string, sectionName: string): string {
@@ -34,7 +35,9 @@ export { getAgentPrompt, AGENT_PROMPT, type AgentContext } from './agent';
 export { 
   chainOfThought, 
   ChainOfThought, 
-  type ChainOfThoughtContext, 
-  type ThoughtStep,
+  type ChainOfThoughtContext,
   BASE_CHAIN_OF_THOUGHT_PROMPT 
-} from './chain-of-thought'; 
+} from './chain-of-thought';
+
+// Re-export types
+export type { ThoughtStep }; 

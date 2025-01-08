@@ -1,159 +1,201 @@
-import { BaseTool } from '../../baseTool';
-import { ToolMetadata, ToolParameterDefinition } from '../../types';
+import { BaseTool } from '../../base';
+import { ToolParameterDefinition, ToolMetadata, ToolParameter, ToolExample, MemoryType } from '@/app/utils/agent/types';
 import { memoryManager } from '@/app/utils/memoryUtils';
-import { MemoryType } from '@/app/utils/agent/types';
 
 export class ReasoningChainTool extends BaseTool {
-  constructor() {
-    const parameters: Record<string, ToolParameterDefinition> = {
+  public readonly name = 'reasoning_chain';
+  public readonly description = 'Manage reasoning chains and steps';
+  public readonly version = '1.0.0';
+  public readonly category = 'memory';
+  public readonly parameters: ToolParameter[] = [
+    {
+      name: 'action',
+      type: 'string',
+      description: 'Action to perform (start, add_step, conclude)',
+      required: true,
+      validation: [{
+        type: 'enum',
+        values: ['start', 'add_step', 'conclude']
+      }]
+    },
+    {
+      name: 'chain_id',
+      type: 'string',
+      description: 'ID of the reasoning chain (required for add_step and conclude)',
+      required: false
+    },
+    {
+      name: 'step_type',
+      type: 'string',
+      description: 'Type of reasoning step (observation, thought, action, result)',
+      required: false,
+      validation: [{
+        type: 'enum',
+        values: ['observation', 'thought', 'action', 'result']
+      }]
+    },
+    {
+      name: 'content',
+      type: 'string',
+      description: 'Content of the step or conclusion',
+      required: false
+    },
+    {
+      name: 'metadata',
+      type: 'object',
+      description: 'Additional metadata for the step or chain',
+      required: false
+    }
+  ];
+
+  public readonly metadata: ToolMetadata = {
+    name: this.name,
+    description: this.description,
+    category: this.category,
+    version: this.version,
+    parameters: {
       action: {
         type: 'string',
         description: 'Action to perform (start, add_step, conclude)',
-        required: true,
         enum: ['start', 'add_step', 'conclude']
       },
       chain_id: {
         type: 'string',
-        description: 'ID of the reasoning chain (required for add_step and conclude)',
-        required: false
+        description: 'ID of the reasoning chain (required for add_step and conclude)'
       },
       step_type: {
         type: 'string',
         description: 'Type of reasoning step (observation, thought, action, result)',
-        required: false,
         enum: ['observation', 'thought', 'action', 'result']
       },
       content: {
         type: 'string',
-        description: 'Content of the step or conclusion',
-        required: false
+        description: 'Content of the step or conclusion'
       },
       metadata: {
         type: 'object',
-        description: 'Additional metadata for the step or chain',
-        required: false
+        description: 'Additional metadata for the step or chain'
       }
-    };
+    },
+    required: ['action'],
+    examples: this.examples
+  };
 
-    const examples = [
-      {
-        name: 'Start chain',
-        description: 'Start a new reasoning chain',
-        parameters: {
-          action: 'start',
-          metadata: {
-            task: 'Debug performance issue'
-          }
-        },
-        expected_result: 'New chain ID'
+  public readonly examples: ToolExample[] = [
+    {
+      name: 'Start reasoning chain',
+      description: 'Start a new reasoning chain',
+      parameters: {
+        action: 'start',
+        metadata: { task: 'Analyze code structure' }
       },
-      {
-        name: 'Add step',
-        description: 'Add a reasoning step to an existing chain',
-        parameters: {
-          action: 'add_step',
-          chain_id: '123e4567-e89b-12d3-a456-426614174000',
-          step_type: 'observation',
-          content: 'High CPU usage detected in monitoring',
-          metadata: {
-            confidence: 0.9
-          }
-        },
-        expected_result: 'Updated chain with new step'
+      expected_result: 'New chain ID'
+    },
+    {
+      name: 'Add reasoning step',
+      description: 'Add a step to an existing reasoning chain',
+      parameters: {
+        action: 'add_step',
+        chain_id: '123',
+        step_type: 'observation',
+        content: 'Found potential issue in code',
+        metadata: { confidence: 0.8 }
       },
-      {
-        name: 'Conclude chain',
-        description: 'Add a conclusion to a reasoning chain',
-        parameters: {
-          action: 'conclude',
-          chain_id: '123e4567-e89b-12d3-a456-426614174000',
-          content: 'Memory leak in background worker identified as root cause',
-          metadata: {
-            confidence: 0.85,
-            recommended_action: 'Fix memory management in worker.js'
+      expected_result: 'Step added successfully'
+    }
+  ];
+
+  private stepNumber = 0;
+
+  async handler(args: Record<string, unknown>): Promise<unknown> {
+    const { action, chain_id, step_type, content } = args;
+    const metadataArg = args.metadata as Record<string, unknown> || {};
+
+    if (typeof action !== 'string') {
+      throw new Error('Action must be a string');
+    }
+
+    try {
+      switch (action) {
+        case 'start': {
+          await memoryManager.store(
+            'reasoning_chain',
+            'Starting new reasoning chain',
+            'reasoning_step' as MemoryType,
+            {
+              type: 'start',
+              ...metadataArg
+            }
+          );
+          return {
+            success: true,
+            chain_id: Date.now().toString()
+          };
+        }
+
+        case 'add_step': {
+          if (!chain_id || typeof chain_id !== 'string') {
+            throw new Error('Chain ID is required for adding steps');
           }
-        },
-        expected_result: 'Chain marked as concluded with final conclusion'
-      }
-    ];
 
-    super(
-      'reasoning_chain',
-      'Manage reasoning chains for tracking thought process and conclusions',
-      'memory',
-      '1.0.0',
-      parameters,
-      ['action'],
-      examples
-    );
-  }
-
-  public async handler(args: Record<string, unknown>): Promise<unknown> {
-    const { action, chain_id, step_type, content, metadata } = args;
-
-    switch (action) {
-      case 'start': {
-        const chainId = crypto.randomUUID();
-        await memoryManager.store(
-          'system',
-          'Started new reasoning chain',
-          'reasoning_step' as MemoryType,
-          {
-            reasoning_chain_id: chainId,
-            ...(metadata as Record<string, unknown> || {})
+          if (!step_type || typeof step_type !== 'string') {
+            throw new Error('Step type is required');
           }
-        );
-        return { chain_id: chainId };
-      }
 
-      case 'add_step': {
-        if (!chain_id) {
-          throw new Error('chain_id is required for add_step action');
-        }
-        if (!step_type) {
-          throw new Error('step_type is required for add_step action');
-        }
-        if (!content) {
-          throw new Error('content is required for add_step action');
-        }
+          if (!content || typeof content !== 'string') {
+            throw new Error('Content is required');
+          }
 
-        await memoryManager.store(
-          'system',
-          content as string,
-          'reasoning_step' as MemoryType,
-          {
-            reasoning_chain_id: chain_id,
+          await memoryManager.store(
+            `${chain_id}_step_${Date.now()}`,
+            content,
+            'reasoning_step' as MemoryType,
+            {
+              chain_id,
+              type: step_type,
+              ...metadataArg
+            }
+          );
+
+          return {
+            success: true,
+            chain_id,
             step_type,
-            ...(metadata as Record<string, unknown> || {})
-          }
-        );
-
-        return { success: true, message: 'Step added to chain' };
-      }
-
-      case 'conclude': {
-        if (!chain_id) {
-          throw new Error('chain_id is required for conclude action');
-        }
-        if (!content) {
-          throw new Error('content is required for conclude action');
+            content
+          };
         }
 
-        await memoryManager.store(
-          'system',
-          content as string,
-          'conclusion' as MemoryType,
-          {
-            reasoning_chain_id: chain_id,
-            ...(metadata as Record<string, unknown> || {})
+        case 'conclude': {
+          if (!chain_id || typeof chain_id !== 'string') {
+            throw new Error('Chain ID is required for concluding');
           }
-        );
 
-        return { success: true, message: 'Chain concluded' };
+          if (!content || typeof content !== 'string') {
+            throw new Error('Content is required for conclusion');
+          }
+
+          await memoryManager.store(
+            `${chain_id}_conclusion`,
+            content,
+            'conclusion' as MemoryType,
+            {
+              chain_id,
+              ...metadataArg
+            }
+          );
+
+          return {
+            success: true,
+            chain_id,
+            conclusion: content
+          };
+        }
+
+        default:
+          throw new Error(`Unknown action: ${action}`);
       }
-
-      default:
-        throw new Error(`Invalid action: ${action}`);
+    } catch (error) {
+      throw new Error(`Reasoning operation failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 } 

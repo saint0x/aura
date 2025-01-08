@@ -1,30 +1,12 @@
-import { MemoryType, ReasoningStep } from '../types';
+import { MemoryType, ThoughtStep, Command } from '../types';
 import { memoryManager } from '../../memoryUtils';
-import { commandManager, COMMAND_CATEGORIES, LearnedCommand, Command } from '../commandUtils';
+import { commandManager, COMMAND_CATEGORIES } from '../commandUtils';
 
 export interface ChainOfThoughtContext {
   sessionId: string;
   userId: string;
   chainId?: string;
   metadata?: Record<string, unknown>;
-}
-
-export interface ThoughtStep {
-  type: ReasoningStep['type'];
-  content: string;
-  confidence?: number;
-  metadata?: Record<string, unknown>;
-  commands?: {
-    original: string;
-    normalized: string;
-    valid: boolean;
-  }[];
-  toolExecutions?: {
-    tool: string;
-    result: unknown;
-    success: boolean;
-    timestamp: Date;
-  }[];
 }
 
 // Base prompt without dynamic command categories
@@ -52,8 +34,10 @@ CORE PRINCIPLES:
 - Acknowledge and explore dead ends
 - Frequently backtrack and revise
 
-4. TOOL VERIFICATION
+4. TOOL VERIFICATION AND CHAINING
 - MUST verify every factual claim with appropriate tools
+- MUST explicitly assess if task requires single or multiple tool calls
+- MUST chain tools together for complex operations
 - NEVER proceed without tool verification if a tool exists
 - Question whether each step requires tool usage
 - If uncertain about tool availability, MUST check first
@@ -61,6 +45,7 @@ CORE PRINCIPLES:
 - If a required tool is missing, MUST acknowledge this explicitly
 - Chain multiple tools together to verify complex claims
 - Record and reference tool execution results
+- NEVER skip tool execution - always execute tools before proceeding
 
 Your output must follow this exact structure:
 
@@ -70,6 +55,7 @@ Your output must follow this exact structure:
 - What do I need to verify with tools?
 - What tool results already exist?
 - What tool chains might I need?
+- Does this task require single or multiple tool calls?
 </observation>
 
 <verification>
@@ -78,6 +64,7 @@ Your output must follow this exact structure:
 - Plan tool execution sequence
 - Note existing tool results
 - Identify missing tool capabilities
+- Specify if tools need to be chained
 </verification>
 
 <exploration>
@@ -87,6 +74,7 @@ Your output must follow this exact structure:
 - Consider multiple angles
 - Look for patterns and relationships
 - Identify useful commands and tools
+- Plan tool chaining if needed
 </exploration>
 
 <reasoning>
@@ -96,6 +84,7 @@ Your output must follow this exact structure:
 - Show uncertainty and revisions
 - Link to previous insights
 - Plan command sequences
+- Execute tools in sequence
 </reasoning>
 
 <validation>
@@ -105,6 +94,7 @@ Your output must follow this exact structure:
 - Consider edge cases
 - Validate assumptions
 - Verify command choices
+- Confirm all necessary tools were executed
 </validation>
 
 <synthesis>
@@ -114,6 +104,7 @@ Your output must follow this exact structure:
 - Suggest next steps
 - Note areas for future exploration
 - Document command patterns
+- Review tool execution results
 </synthesis>
 
 <conclusion>
@@ -123,6 +114,7 @@ Your output must follow this exact structure:
 - Alternative approaches
 - Open questions
 - Command execution plan
+- Verify all required tools were used
 </conclusion>
 `;
 
@@ -136,9 +128,9 @@ You have access to the following command categories:
 ${Object.entries(COMMAND_CATEGORIES)
   .map(([category, commands]) => `
 ${category.toUpperCase()} COMMANDS:
-${Object.values(commands as Record<string, Command>)
-  .map((cmd: Command) => `- ${cmd.command}: ${cmd.description}
-  Aliases: ${cmd.aliases?.join(', ') || 'none'}`)
+${Array.from(commands as Map<string, CommandInfo>)
+  .map(([name, cmd]) => `- ${cmd.command}: ${cmd.description}
+  Aliases: ${Array.from(cmd.aliases).join(', ') || 'none'}`)
   .join('\n')}
 `).join('\n')}
 
@@ -155,191 +147,123 @@ When using commands:
   }
 }
 
-export class ChainOfThought {
-  private context: ChainOfThoughtContext;
-  private toolExecutions: Map<string, {
-    result: unknown;
-    success: boolean;
-    timestamp: Date;
-  }> = new Map();
+interface CommandInfo {
+  id: string;
+  name: string;
+  command: string;
+  category: string;
+  description: string;
+  aliases: string[];
+  parameters: Record<string, {
+    type: string;
+    description: string;
+  }>;
+  examples: string[];
+  metadata: Record<string, unknown>;
+  created_at: number;
+  updated_at: number;
+}
 
-  constructor(context: ChainOfThoughtContext) {
+export class ChainOfThought {
+  private toolExecutions: Map<string, { success: boolean; result: unknown }>;
+  private commands: Map<string, CommandInfo>;
+  private thoughts: ThoughtStep[];
+  private chainId?: string;
+  private context?: ChainOfThoughtContext;
+
+  constructor() {
+    this.toolExecutions = new Map<string, { success: boolean; result: unknown }>();
+    this.commands = new Map<string, CommandInfo>();
+    this.thoughts = [];
+  }
+
+  setContext(context: ChainOfThoughtContext): void {
     this.context = context;
   }
 
-  recordToolExecution(tool: string, result: unknown, success: boolean): void {
-    this.toolExecutions.set(tool, {
-      result,
-      success,
-      timestamp: new Date()
-    });
+  recordToolExecution(toolName: string, result: unknown, success: boolean): void {
+    this.toolExecutions.set(toolName, { success, result });
   }
 
-  getToolExecutionResult(tool: string): unknown | null {
-    return this.toolExecutions.get(tool)?.result ?? null;
+  hasToolBeenExecuted(toolName: string): boolean {
+    return this.toolExecutions.has(toolName);
   }
 
-  hasToolBeenExecuted(tool: string): boolean {
-    return this.toolExecutions.has(tool);
+  getToolExecutionResult(toolName: string): unknown | null {
+    return this.toolExecutions.get(toolName)?.result || null;
   }
 
-  static async getPrompt(variables: Record<string, unknown> = {}): Promise<string> {
-    let prompt = BASE_CHAIN_OF_THOUGHT_PROMPT;
-    
-    try {
-      // Try to add command categories if available
-      const commandSection = getCommandCategoriesSection();
-      if (commandSection) {
-        prompt = prompt.replace('4. MEMORY INTEGRATION', `4. MEMORY INTEGRATION\n\n${commandSection}`);
-      }
+  addThought(thought: Omit<ThoughtStep, 'id' | 'timestamp'>): void {
+    const fullThought: ThoughtStep = {
+      ...thought,
+      id: Math.random().toString(36).substring(2),
+      timestamp: Date.now()
+    };
+    this.thoughts.push(fullThought);
+  }
 
-      // Try to add learned commands if memory is available
-      const learnedCommands = await commandManager.getLearnedCommands().catch(() => []);
-      const enhancedVariables = {
-        ...variables,
-        available_commands: commandManager.getAvailableCommands(),
-        command_categories: Object.keys(COMMAND_CATEGORIES),
-        learned_commands: learnedCommands.map((cmd) => 
-          `${cmd.original} → ${cmd.normalized} (used ${cmd.frequency} times)`
-        )
-      };
-      
-      // Replace any variables in the prompt
-      Object.entries(enhancedVariables).forEach(([key, value]) => {
-        prompt = prompt.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), String(value));
-      });
-    } catch (error) {
-      // If command manager or memory isn't initialized, just use the base prompt with available variables
-      Object.entries(variables).forEach(([key, value]) => {
-        prompt = prompt.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), String(value));
-      });
-    }
+  getThoughts(): ThoughtStep[] {
+    return [...this.thoughts];
+  }
 
-    return prompt;
+  clearThoughts(): void {
+    this.thoughts = [];
+  }
+
+  clearToolExecutions(): void {
+    this.toolExecutions.clear();
+  }
+
+  clear(): void {
+    this.clearThoughts();
+    this.clearToolExecutions();
+    this.commands.clear();
+  }
+
+  addCommand(name: string, info: CommandInfo): void {
+    this.commands.set(name, info);
+  }
+
+  getCommands(): Map<string, CommandInfo> {
+    return new Map(this.commands);
   }
 
   async startChain(task: string): Promise<string> {
-    const chainId = crypto.randomUUID();
-    await memoryManager.store(
-      this.context.sessionId,
-      `Starting new reasoning chain: ${task}`,
-      'reasoning_step' as MemoryType,
-      {
-        chain_id: chainId,
-        user_id: this.context.userId,
-        task,
-        available_commands: commandManager.getAvailableCommands(),
-        ...this.context.metadata
-      }
-    );
-    this.context.chainId = chainId;
-    return chainId;
-  }
-
-  async addThought(step: ThoughtStep): Promise<void> {
-    if (!this.context.chainId) {
-      throw new Error('Chain not initialized. Call startChain first.');
-    }
-
-    // Extract and validate commands from the thought
-    const commands = await extractCommands(step.content);
-    const validatedCommands = await Promise.all(commands.map(async (cmd: string) => {
-      const normalized = commandManager.normalizeCommand(cmd);
-      const valid = normalized !== null;
-      
-      // Learn successful command patterns
-      if (valid && normalized) {
-        const category = commandManager.getCommandInfo(normalized)?.category || 'unknown';
-        await commandManager.learnCommand(cmd, normalized, category, {
-          chain_id: this.context.chainId,
-          context: this.context.metadata,
-          confidence: step.confidence
-        });
-      }
-
-      return {
-        original: cmd,
-        normalized: normalized || cmd,
-        valid
-      };
-    }));
-
-    // Add tool executions to the thought step
-    const toolExecutions = Array.from(this.toolExecutions.entries()).map(([tool, execution]) => ({
-      tool,
-      result: execution.result,
-      success: execution.success,
-      timestamp: execution.timestamp
-    }));
-
-    await memoryManager.store(
-      this.context.sessionId,
-      step.content,
-      'reasoning_step' as MemoryType,
-      {
-        chain_id: this.context.chainId,
-        step_type: step.type,
-        confidence: step.confidence,
-        commands: validatedCommands,
-        toolExecutions,
-        ...step.metadata
-      }
-    );
+    this.chainId = Math.random().toString(36).substring(2);
+    this.clear();
+    this.addThought({
+      type: 'observation',
+      content: `Starting chain for task: ${task}`,
+      metadata: { task, chainId: this.chainId }
+    });
+    return this.chainId;
   }
 
   async conclude(conclusion: string, confidence: number): Promise<void> {
-    if (!this.context.chainId) {
-      throw new Error('Chain not initialized. Call startChain first.');
-    }
-
-    await memoryManager.store(
-      this.context.sessionId,
-      conclusion,
-      'conclusion' as MemoryType,
-      {
-        chain_id: this.context.chainId,
-        confidence,
-        ...this.context.metadata
-      }
-    );
+    this.addThought({
+      type: 'decision',
+      content: conclusion,
+      metadata: { confidence, chainId: this.chainId }
+    });
   }
 
-  async getChainSteps(): Promise<ReasoningStep[]> {
-    if (!this.context.chainId) {
-      throw new Error('Chain not initialized. Call startChain first.');
-    }
+  static getPrompt(context: ChainOfThoughtContext): string {
+    return `${BASE_CHAIN_OF_THOUGHT_PROMPT}
+${getCommandCategoriesSection()}
 
-    const entries = await memoryManager.searchMemory(
-      this.context.sessionId,
-      '',
-      {
-        metadata: { chain_id: this.context.chainId },
-        type: 'reasoning_step'
-      }
-    );
-
-    return entries.map(entry => ({
-      type: entry.metadata?.step_type as ReasoningStep['type'],
-      content: entry.content,
-      metadata: entry.metadata
-    }));
+CONTEXT:
+Session ID: ${context.sessionId}
+User ID: ${context.userId}
+Chain ID: ${context.chainId || 'Not started'}
+${context.metadata ? `Metadata: ${JSON.stringify(context.metadata, null, 2)}` : ''}`;
   }
 
-  async getConclusion(): Promise<string | null> {
-    if (!this.context.chainId) {
-      throw new Error('Chain not initialized. Call startChain first.');
-    }
+  static create(): ChainOfThought {
+    return new ChainOfThought();
+  }
 
-    const entries = await memoryManager.searchMemory(
-      this.context.sessionId,
-      '',
-      {
-        metadata: { chain_id: this.context.chainId },
-        type: 'conclusion'
-      }
-    );
-
-    return entries.length > 0 ? entries[0].content : null;
+  static createFromContext(): ChainOfThought {
+    return new ChainOfThought();
   }
 }
 
@@ -350,16 +274,20 @@ async function extractCommands(text: string): Promise<string[]> {
   const matches = text.match(commandRegex) || [];
   
   try {
-    const learnedCommands = await commandManager.getLearnedCommands().catch(() => []);
+    const learnedCommands = await commandManager.getLearnedCommands();
     return matches.filter((match) => 
-      commandManager.validateCommand(match) || 
+      commandManager.validateCommand(match, 'file') || 
       learnedCommands.some((cmd) => cmd.original === match.toLowerCase())
     );
   } catch (error) {
     // If memory isn't initialized, just use basic command validation
-    return matches.filter((match) => commandManager.validateCommand(match));
+    return matches.filter((match) => commandManager.validateCommand(match, 'file'));
   }
 }
 
 // Export factory function
-export const chainOfThought = (context: ChainOfThoughtContext) => new ChainOfThought(context); 
+export const chainOfThought = (context: ChainOfThoughtContext) => {
+  const instance = new ChainOfThought();
+  instance.setContext(context);
+  return instance;
+}; 

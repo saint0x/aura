@@ -1,194 +1,117 @@
 import { BaseTool } from '../../base';
-import { ValidationError } from '@/app/common/errors';
-import screenshot from 'screenshot-desktop';
-import { ToolMetadata } from '../../types';
-
-interface CaptureRegion {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
+import { ToolParameterDefinition, ToolMetadata, ToolParameter, ToolExample } from '@/app/utils/agent/types';
+import { captureScreen } from '../../../../../utils/screenUtils';
 
 export class ScreenCaptureTool extends BaseTool {
-  public readonly name = 'capture_screen';
-  public readonly description = 'Capture a screenshot of the screen or a specific region';
+  public readonly name = 'screen_capture';
+  public readonly description = 'Capture screen content';
   public readonly version = '1.0.0';
   public readonly category = 'screen';
-  public readonly parameters = [
+  public readonly parameters: ToolParameter[] = [
     {
-      name: 'region',
-      type: 'object' as const,
-      description: 'The region to capture (optional). If not provided, captures entire screen.',
-      required: false,
-      schema: [
-        {
-          name: 'x',
-          type: 'number' as const,
-          description: 'X coordinate of the region',
-          required: true,
-          validation: [
-            {
-              type: 'range' as const,
-              min: 0,
-              max: 10000
-            }
-          ]
-        },
-        {
-          name: 'y',
-          type: 'number' as const,
-          description: 'Y coordinate of the region',
-          required: true,
-          validation: [
-            {
-              type: 'range' as const,
-              min: 0,
-              max: 10000
-            }
-          ]
-        },
-        {
-          name: 'width',
-          type: 'number' as const,
-          description: 'Width of the region',
-          required: true,
-          validation: [
-            {
-              type: 'range' as const,
-              min: 1,
-              max: 10000
-            }
-          ]
-        },
-        {
-          name: 'height',
-          type: 'number' as const,
-          description: 'Height of the region',
-          required: true,
-          validation: [
-            {
-              type: 'range' as const,
-              min: 1,
-              max: 10000
-            }
-          ]
-        }
-      ]
-    }
-  ];
-
-  public override get metadata(): ToolMetadata {
-    return {
-      name: this.name,
-      description: this.description,
-      category: this.category,
-      version: this.version,
-      parameters: {
-        region: {
-          type: 'object',
-          description: 'The region to capture (optional). If not provided, captures entire screen.',
-          required: false,
-          schema: [
-            {
-              name: 'x',
-              type: 'number',
-              description: 'X coordinate of the region',
-              required: true,
-              validation: [
-                {
-                  type: 'range',
-                  min: 0,
-                  max: 10000
-                }
-              ]
-            },
-            {
-              name: 'y',
-              type: 'number',
-              description: 'Y coordinate of the region',
-              required: true,
-              validation: [
-                {
-                  type: 'range',
-                  min: 0,
-                  max: 10000
-                }
-              ]
-            },
-            {
-              name: 'width',
-              type: 'number',
-              description: 'Width of the region',
-              required: true,
-              validation: [
-                {
-                  type: 'range',
-                  min: 1,
-                  max: 10000
-                }
-              ]
-            },
-            {
-              name: 'height',
-              type: 'number',
-              description: 'Height of the region',
-              required: true,
-              validation: [
-                {
-                  type: 'range',
-                  min: 1,
-                  max: 10000
-                }
-              ]
-            }
-          ]
-        }
-      },
-      required: []
-    };
-  }
-
-  public readonly examples = [
-    {
-      name: 'Capture entire screen',
-      description: 'Take a screenshot of the entire screen',
-      parameters: {},
-      expected_result: 'Buffer containing the screenshot image'
+      name: 'area',
+      type: 'string',
+      description: 'Area to capture (full, window, selection)',
+      required: true,
+      validation: [{
+        type: 'enum',
+        values: ['full', 'window', 'selection']
+      }]
     },
     {
-      name: 'Capture specific region',
-      description: 'Take a screenshot of a 500x500 region at coordinates (100,100)',
-      parameters: {
-        region: {
-          x: 100,
-          y: 100,
-          width: 500,
-          height: 500
-        }
-      },
-      expected_result: 'Buffer containing the screenshot image of the specified region'
+      name: 'format',
+      type: 'string',
+      description: 'Output format (png, jpg)',
+      required: false,
+      validation: [{
+        type: 'enum',
+        values: ['png', 'jpg']
+      }]
+    },
+    {
+      name: 'explanation',
+      type: 'string',
+      description: 'One sentence explanation as to why this tool is being used, and how it contributes to the goal.',
+      required: true
     }
   ];
 
-  public async handler(params: Record<string, unknown>): Promise<unknown> {
-    try {
-      if ('region' in params) {
-        const region = params.region as CaptureRegion;
-        return await screenshot({
-          screen: 0,
-          x: region.x,
-          y: region.y,
-          width: region.width,
-          height: region.height
-        });
+  public readonly metadata: ToolMetadata = {
+    name: this.name,
+    description: this.description,
+    category: this.category,
+    version: this.version,
+    parameters: {
+      area: {
+        type: 'string',
+        description: 'Area to capture (full, window, selection)',
+        enum: ['full', 'window', 'selection']
+      },
+      format: {
+        type: 'string',
+        description: 'Output format (png, jpg)',
+        enum: ['png', 'jpg']
+      },
+      explanation: {
+        type: 'string',
+        description: 'One sentence explanation as to why this tool is being used, and how it contributes to the goal.'
       }
-      return await screenshot();
-    } catch (error) {
-      throw new ValidationError({
-        message: `Failed to capture screenshot: ${(error as Error).message}`,
-        param: 'region'
+    },
+    required: ['area', 'explanation'],
+    examples: this.examples
+  };
+
+  public readonly examples: ToolExample[] = [
+    {
+      name: 'Capture full screen',
+      description: 'Take a screenshot of the entire screen',
+      parameters: {
+        area: 'full',
+        format: 'png',
+        explanation: 'Capturing full screen to analyze layout'
+      },
+      expected_result: 'Screenshot saved as PNG'
+    },
+    {
+      name: 'Capture window',
+      description: 'Take a screenshot of the active window',
+      parameters: {
+        area: 'window',
+        format: 'jpg',
+        explanation: 'Capturing active window for documentation'
+      },
+      expected_result: 'Screenshot saved as JPG'
+    }
+  ];
+
+  async handler(args: Record<string, unknown>): Promise<unknown> {
+    const { area, format = 'png' } = args;
+
+    if (typeof area !== 'string') {
+      throw new Error('area must be a string');
+    }
+
+    if (format !== undefined && typeof format !== 'string') {
+      throw new Error('format must be a string');
+    }
+
+    try {
+      const result = await captureScreen({
+        area,
+        format: format as 'png' | 'jpg'
       });
+
+      return {
+        success: true,
+        result: {
+          area,
+          format,
+          path: result.path,
+          dimensions: result.dimensions
+        }
+      };
+    } catch (error) {
+      throw new Error(`Failed to capture screen: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 } 

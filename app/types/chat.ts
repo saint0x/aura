@@ -1,10 +1,25 @@
+import { ReasoningChain } from '@/app/utils/agent/types';
+
 export type MessageRole = 'user' | 'assistant' | 'system';
+
+export interface MessageMetadata {
+  audioUrl?: string;
+  transcription?: string;
+  reasoning_chain?: ReasoningChain;
+  tool_execution_map?: Record<string, {
+    executed: boolean;
+    result?: unknown;
+    error?: string;
+  }>;
+  next_steps?: string;
+  error_context?: string;
+}
 
 export interface Message {
   id?: string;
   role: MessageRole;
   content: string;
-  metadata?: Record<string, unknown>;
+  metadata?: MessageMetadata;
   timestamp?: Date;
   error?: string;
 }
@@ -25,7 +40,7 @@ export interface ChatState {
 
 export interface ChatResponse {
   message: Message;
-  metadata?: Record<string, unknown>;
+  metadata?: MessageMetadata;
 }
 
 export interface ChatRequest {

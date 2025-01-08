@@ -1,147 +1,160 @@
-import { BaseTool } from '../../baseTool';
-import { ValidationError } from '@/app/common/errors';
-import { ToolMetadata, ToolParameterDefinition } from '../../types';
-import fs from 'fs';
-import path from 'path';
-import { expandPath, isPathAccessible, getCommonDirectories } from '@/app/utils/fileUtils';
+import { BaseTool } from '../../base';
+import { ToolParameterDefinition, ToolMetadata, ToolParameter, ToolExample } from '@/app/utils/agent/types';
+import { readdir, stat } from 'fs/promises';
+import { join, relative } from 'path';
 
-interface FileSystemEntry {
+interface FileInfo {
   name: string;
+  path: string;
   type: 'file' | 'directory';
   size?: number;
-  lastModified?: Date;
+  modified?: Date;
 }
 
 export class BrowseFilesystemTool extends BaseTool {
-  constructor() {
-    const parameters: Record<string, ToolParameterDefinition> = {
+  public readonly name = 'browse_filesystem';
+  public readonly description = 'Browse and list files in the filesystem';
+  public readonly version = '1.0.0';
+  public readonly category = 'file';
+  public readonly parameters: ToolParameter[] = [
+    {
+      name: 'path',
+      type: 'string',
+      description: 'Directory path to browse',
+      required: true
+    },
+    {
+      name: 'pattern',
+      type: 'string',
+      description: 'File pattern to match (e.g., *.ts)',
+      required: false
+    },
+    {
+      name: 'recursive',
+      type: 'boolean',
+      description: 'Whether to search recursively',
+      required: false
+    },
+    {
+      name: 'explanation',
+      type: 'string',
+      description: 'One sentence explanation as to why this tool is being used, and how it contributes to the goal.',
+      required: true
+    }
+  ];
+
+  public readonly metadata: ToolMetadata = {
+    name: this.name,
+    description: this.description,
+    category: this.category,
+    version: this.version,
+    parameters: {
       path: {
         type: 'string',
-        description: 'The directory path to browse. Use ~ for home directory (e.g., ~/Desktop, ~/Documents), absolute paths (/Users/name/folder), or relative paths (./folder). Always returns live directory contents.',
-        required: true
+        description: 'Directory path to browse'
+      },
+      pattern: {
+        type: 'string',
+        description: 'File pattern to match (e.g., *.ts)'
+      },
+      recursive: {
+        type: 'boolean',
+        description: 'Whether to search recursively'
+      },
+      explanation: {
+        type: 'string',
+        description: 'One sentence explanation as to why this tool is being used, and how it contributes to the goal.'
       }
-    };
+    },
+    required: ['path', 'explanation'],
+    examples: this.examples
+  };
 
-    const required = ['path'];
+  public readonly examples: ToolExample[] = [
+    {
+      name: 'List directory',
+      description: 'List files in a directory',
+      parameters: {
+        path: 'src',
+        explanation: 'Browsing source directory to find relevant files'
+      },
+      expected_result: 'Array of file and directory information'
+    },
+    {
+      name: 'Search TypeScript files',
+      description: 'Find TypeScript files recursively',
+      parameters: {
+        path: 'src',
+        pattern: '*.ts',
+        recursive: true,
+        explanation: 'Finding all TypeScript files for analysis'
+      },
+      expected_result: 'Array of TypeScript files'
+    }
+  ];
 
-    const examples = [
-      {
-        name: 'Browse Desktop',
-        description: 'List the current contents of the Desktop directory',
-        parameters: {
-          path: '~/Desktop'
-        },
-        expected_result: 'Live array of files and directories currently on the Desktop'
-      },
-      {
-        name: 'Browse Documents',
-        description: 'List the current contents of the Documents directory',
-        parameters: {
-          path: '~/Documents'
-        },
-        expected_result: 'Live array of files and directories currently in Documents'
-      },
-      {
-        name: 'Browse Current Directory',
-        description: 'List contents of the current working directory in real-time',
-        parameters: {
-          path: '.'
-        },
-        expected_result: 'Live array of files and directories in the current directory'
-      },
-      {
-        name: 'Browse with Fallback',
-        description: 'Attempt to browse a directory, with helpful suggestions if not accessible',
-        parameters: {
-          path: '~/Projects'
-        },
-        expected_result: 'Either live directory contents or suggestions for accessible directories'
+  private async listFiles(dirPath: string, pattern?: string, recursive = false): Promise<FileInfo[]> {
+    const results: FileInfo[] = [];
+    const files = await readdir(dirPath);
+
+    for (const file of files) {
+      const fullPath = join(dirPath, file);
+      const stats = await stat(fullPath);
+      const relativePath = relative(process.cwd(), fullPath);
+
+      if (stats.isDirectory() && recursive) {
+        results.push({
+          name: file,
+          path: relativePath,
+          type: 'directory',
+          modified: stats.mtime
+        });
+        results.push(...await this.listFiles(fullPath, pattern, recursive));
+      } else {
+        if (!pattern || file.match(new RegExp(pattern.replace('*', '.*')))) {
+          results.push({
+            name: file,
+            path: relativePath,
+            type: stats.isDirectory() ? 'directory' : 'file',
+            size: stats.size,
+            modified: stats.mtime
+          });
+        }
       }
-    ];
+    }
 
-    super(
-      'browse_filesystem',
-      'Browse and explore the live directory structure of the computer. Can access any directory including Desktop, Documents, Downloads, and the current workspace. Returns real-time directory contents and suggests accessible paths.',
-      'file',
-      '1.0.0',
-      parameters,
-      required,
-      examples
-    );
+    return results;
   }
 
-  private getFileStats(entryPath: string): FileSystemEntry {
-    const stats = fs.statSync(entryPath);
-    return {
-      name: path.basename(entryPath),
-      type: stats.isDirectory() ? 'directory' : 'file',
-      size: stats.isFile() ? stats.size : undefined,
-      lastModified: stats.mtime
-    };
-  }
+  async handler(args: Record<string, unknown>): Promise<unknown> {
+    const { path, pattern, recursive = false } = args;
 
-  public async handler(params: Record<string, unknown>): Promise<unknown> {
-    const requestedPath = params.path;
-    if (typeof requestedPath !== 'string') {
-      throw new ValidationError({
-        message: 'path must be a string',
-        param: 'path'
-      });
+    if (typeof path !== 'string') {
+      throw new Error('path must be a string');
+    }
+
+    if (pattern !== undefined && typeof pattern !== 'string') {
+      throw new Error('pattern must be a string');
+    }
+
+    if (recursive !== undefined && typeof recursive !== 'boolean') {
+      throw new Error('recursive must be a boolean');
     }
 
     try {
-      // Expand and normalize the path
-      const normalizedPath = expandPath(requestedPath);
-
-      // Check if path exists and is accessible
-      if (!isPathAccessible(normalizedPath)) {
-        // If path is not accessible, return common directories
-        return {
-          error: `Path ${normalizedPath} is not accessible`,
-          suggestion: 'Try one of these common directories:',
-          common_directories: getCommonDirectories()
-        };
-      }
-
-      // Check if path is a directory
-      const stats = fs.statSync(normalizedPath);
-      if (!stats.isDirectory()) {
-        throw new ValidationError({
-          message: 'Path must be a directory',
-          param: 'path'
-        });
-      }
-
-      // Read directory contents
-      const entries = fs.readdirSync(normalizedPath);
-      const contents: FileSystemEntry[] = [];
-
-      for (const entry of entries) {
-        try {
-          const entryPath = path.join(normalizedPath, entry);
-          if (isPathAccessible(entryPath)) {
-            contents.push(this.getFileStats(entryPath));
-          }
-        } catch (error) {
-          // Skip entries that can't be accessed
-          console.warn(`Skipping inaccessible entry: ${entry}`);
-        }
-      }
+      const files = await this.listFiles(path, pattern, recursive);
 
       return {
-        path: normalizedPath,
-        contents,
-        parent: path.dirname(normalizedPath),
-        common_directories: getCommonDirectories()
+        success: true,
+        result: {
+          path,
+          pattern,
+          recursive,
+          files
+        }
       };
     } catch (error) {
-      if (error instanceof ValidationError) {
-        throw error;
-      }
-      throw new ValidationError({
-        message: `Failed to read directory: ${(error as Error).message}`,
-        param: 'path'
-      });
+      throw new Error(`Failed to browse filesystem: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 } 

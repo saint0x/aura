@@ -1,112 +1,72 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
+import { Message as MessageType, MessageMetadata } from '@/app/types/chat';
 import Message from './Message';
-import { Message as MessageType } from '@/app/types';
+import MarkdownViewer from './MarkdownViewer';
 
 interface ChatContainerProps {
   messages: MessageType[];
-  isLoading?: boolean;
-  hasMore?: boolean;
-  onLoadMore?: () => void;
-  className?: string;
+  isLoading: boolean;
 }
 
-const ChatContainer: React.FC<ChatContainerProps> = ({ 
-  messages,
-  isLoading = false,
-  hasMore = false,
-  onLoadMore,
-  className = ''
-}) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const observerRef = useRef<HTMLDivElement>(null);
-  const isLoadingRef = useRef(isLoading);
+export default function ChatContainer({ messages, isLoading }: ChatContainerProps) {
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Update loading ref when prop changes
   useEffect(() => {
-    isLoadingRef.current = isLoading;
-  }, [isLoading]);
-
-  // Check if we're near the bottom of the container
-  const isNearBottom = useCallback(() => {
-    if (!containerRef.current) return false;
-    const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
-    return scrollHeight - (scrollTop + clientHeight) < 100;
-  }, []);
-
-  // Scroll to bottom when new messages are added
-  useEffect(() => {
-    if (containerRef.current && messages.length > 0) {
-      const lastMessage = messages[messages.length - 1];
-      // Only auto-scroll if the last message is from the assistant or if we're near the bottom
-      if (lastMessage.role === 'assistant' || isNearBottom()) {
-        containerRef.current.scrollTop = containerRef.current.scrollHeight;
-      }
-    }
-  }, [messages, isNearBottom]);
-
-  // Set up intersection observer for infinite scroll
-  useEffect(() => {
-    if (!onLoadMore || !hasMore) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const firstEntry = entries[0];
-        if (firstEntry.isIntersecting && !isLoadingRef.current && hasMore) {
-          onLoadMore();
-        }
-      },
-      {
-        root: containerRef.current,
-        threshold: 0.1,
-      }
-    );
-
-    if (observerRef.current) {
-      observer.observe(observerRef.current);
-    }
-
-    return () => observer.disconnect();
-  }, [onLoadMore, hasMore]);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   return (
-    <div 
-      ref={containerRef}
-      className={`flex-1 overflow-y-auto bg-white scrollbar-thin scrollbar-thumb-indigo-200 scrollbar-track-gray-50 ${className}`}
-    >
-      <div className="min-h-full">
-        {/* Intersection Observer Target */}
-        {hasMore && (
-          <div
-            ref={observerRef}
-            className="h-8 flex items-center justify-center"
-          >
-            {isLoading && (
-              <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-indigo-500" />
-            )}
-          </div>
-        )}
-
-        {/* Welcome Message */}
-        {messages.length === 0 && (
-          <div className="p-8 text-center">
-            <h1 className="text-2xl font-semibold text-gray-700 mb-4">Welcome to Aura</h1>
-            <p className="text-gray-600 mb-2">I&apos;m your AI assistant. How can I help you today?</p>
-            <p className="text-gray-500 text-sm">Try asking me anything!</p>
-          </div>
-        )}
-
-        {/* Messages */}
-        {messages.map((message, index) => (
-          <Message
-            key={index}
-            message={message}
-            isLast={index === messages.length - 1}
-            isLoading={isLoading && index === messages.length - 1}
-          />
-        ))}
-      </div>
+    <div className="flex flex-col h-full overflow-y-auto p-4 space-y-4">
+      {messages.map((message, index) => (
+        <div key={index} className="flex flex-col space-y-2">
+          <Message message={message} isLast={index === messages.length - 1} isLoading={isLoading && index === messages.length - 1} />
+          {message.metadata?.reasoning_chain && (
+            <div className="ml-8 p-4 bg-gray-800 rounded-lg border border-gray-700">
+              <h3 className="text-sm font-semibold text-gray-300 mb-2">Reasoning Chain</h3>
+              <div className="space-y-2">
+                {message.metadata.reasoning_chain.steps.map((step, stepIndex) => (
+                  <div key={stepIndex} className="text-sm text-gray-400">
+                    <span className="font-medium text-gray-300">{step.type}: </span>
+                    <MarkdownViewer content={step.content || ''} />
+                    {step.explanation && (
+                      <div className="ml-4 text-gray-500">
+                        <span className="font-medium">Explanation: </span>
+                        {step.explanation}
+                      </div>
+                    )}
+                    {step.observation && (
+                      <div className="ml-4 text-gray-500">
+                        <span className="font-medium">Observation: </span>
+                        {step.observation}
+                      </div>
+                    )}
+                    {step.decision && (
+                      <div className="ml-4 text-gray-500">
+                        <span className="font-medium">Decision: </span>
+                        {step.decision}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {message.metadata.reasoning_chain.conclusion && (
+                  <div className="mt-4 text-sm">
+                    <span className="font-medium text-gray-300">Conclusion: </span>
+                    <MarkdownViewer content={message.metadata.reasoning_chain.conclusion || ''} />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+      {isLoading && (
+        <div className="flex items-center space-x-2 text-gray-400">
+          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+        </div>
+      )}
+      <div ref={messagesEndRef} />
     </div>
   );
-};
-
-export default ChatContainer; 
+} 

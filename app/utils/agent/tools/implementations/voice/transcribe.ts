@@ -1,128 +1,106 @@
 import { BaseTool } from '../../base';
-import { ValidationError } from '@/app/common/errors';
-import { OpenAI } from 'openai';
-import fs from 'fs/promises';
-import { ToolMetadata } from '../../types';
+import { ToolParameterDefinition, ToolMetadata, ToolParameter, ToolExample } from '@/app/utils/agent/types';
+import { transcribeAudio } from '../../../../../utils/voiceUtils';
 
 export class TranscribeAudioTool extends BaseTool {
   public readonly name = 'transcribe_audio';
-  public readonly description = 'Transcribe audio content to text using Whisper';
+  public readonly description = 'Transcribe audio to text';
   public readonly version = '1.0.0';
   public readonly category = 'voice';
-  public readonly parameters = [
+  public readonly parameters: ToolParameter[] = [
     {
       name: 'audio_path',
-      type: 'string' as const,
-      description: 'Path to the audio file to transcribe',
-      required: true,
-      validation: [
-        {
-          type: 'pattern' as const,
-          regex: /\.(mp3|wav|m4a|webm)$/
-        }
-      ]
+      type: 'string',
+      description: 'Path to the audio file',
+      required: true
     },
     {
       name: 'language',
-      type: 'string' as const,
-      description: 'Language code for transcription (e.g., "en", "es"). If not provided, auto-detects language.',
-      required: false,
-      validation: [
-        {
-          type: 'pattern' as const,
-          regex: /^[a-z]{2}$/
-        }
-      ]
-    }
-  ];
-
-  public override get metadata(): ToolMetadata {
-    return {
-      name: this.name,
-      description: this.description,
-      category: this.category,
-      version: this.version,
-      parameters: {
-        audio_path: {
-          type: 'string',
-          description: 'Path to the audio file to transcribe',
-          required: true
-        },
-        language: {
-          type: 'string',
-          description: 'Language code (e.g. "en", "es", "fr")',
-          required: false,
-          enum: ['en', 'es', 'fr', 'de', 'it', 'pt', 'nl', 'ja', 'ko', 'zh']
-        }
-      },
-      required: ['audio_path']
-    };
-  }
-
-  public readonly examples = [
-    {
-      name: 'Transcribe English audio',
-      description: 'Transcribe an English audio file with explicit language setting',
-      parameters: {
-        audio_path: 'recordings/meeting.mp3',
-        language: 'en'
-      },
-      expected_result: 'Transcribed text content from the audio file'
+      type: 'string',
+      description: 'Language code (e.g., en-US)',
+      required: false
     },
     {
-      name: 'Auto-detect language',
-      description: 'Transcribe an audio file with automatic language detection',
-      parameters: {
-        audio_path: 'recordings/message.wav'
-      },
-      expected_result: 'Transcribed text content with auto-detected language'
+      name: 'explanation',
+      type: 'string',
+      description: 'One sentence explanation as to why this tool is being used, and how it contributes to the goal.',
+      required: true
     }
   ];
 
-  public async handler(params: Record<string, unknown>): Promise<unknown> {
-    const audio_path = params.audio_path;
+  public readonly metadata: ToolMetadata = {
+    name: this.name,
+    description: this.description,
+    category: this.category,
+    version: this.version,
+    parameters: {
+      audio_path: {
+        type: 'string',
+        description: 'Path to the audio file'
+      },
+      language: {
+        type: 'string',
+        description: 'Language code (e.g., en-US)'
+      },
+      explanation: {
+        type: 'string',
+        description: 'One sentence explanation as to why this tool is being used, and how it contributes to the goal.'
+      }
+    },
+    required: ['audio_path', 'explanation'],
+    examples: this.examples
+  };
+
+  public readonly examples: ToolExample[] = [
+    {
+      name: 'Transcribe English audio',
+      description: 'Transcribe an English audio file',
+      parameters: {
+        audio_path: 'recordings/meeting.mp3',
+        language: 'en-US',
+        explanation: 'Converting meeting recording to text for analysis'
+      },
+      expected_result: 'Transcribed text from the audio file'
+    },
+    {
+      name: 'Transcribe auto-detect',
+      description: 'Transcribe audio with automatic language detection',
+      parameters: {
+        audio_path: 'recordings/message.wav',
+        explanation: 'Converting voice message to text'
+      },
+      expected_result: 'Transcribed text with auto-detected language'
+    }
+  ];
+
+  async handler(args: Record<string, unknown>): Promise<unknown> {
+    const { audio_path, language = 'en-US' } = args;
+
     if (typeof audio_path !== 'string') {
-      throw new ValidationError({
-        message: 'audio_path must be a string',
-        param: 'audio_path'
-      });
+      throw new Error('audio_path must be a string');
     }
 
-    const language = params.language;
     if (language !== undefined && typeof language !== 'string') {
-      throw new ValidationError({
-        message: 'language must be a string if provided',
-        param: 'language'
-      });
+      throw new Error('language must be a string');
     }
 
     try {
-      // Read audio file
-      const audioBuffer = await fs.readFile(audio_path);
-      const audioBlob = new Blob([audioBuffer]);
-      const audioFile = new File([audioBlob], 'audio.mp3', { type: 'audio/mpeg' });
-
-      // Initialize OpenAI client
-      const openai = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY
-      });
-
-      // Transcribe audio
-      const transcription = await openai.audio.transcriptions.create({
-        file: audioFile,
-        model: 'whisper-1',
+      const result = await transcribeAudio({
+        audioPath: audio_path,
         language
       });
 
-      return transcription.text;
+      return {
+        success: true,
+        result: {
+          text: result.text,
+          language: result.detectedLanguage,
+          confidence: result.confidence,
+          duration: result.duration
+        }
+      };
     } catch (error) {
-      if (error instanceof ValidationError) {
-        throw error;
-      }
-      throw new ValidationError({
-        message: `Failed to transcribe audio: ${(error as Error).message}`,
-        param: 'audio_path'
-      });
+      throw new Error(`Failed to transcribe audio: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 } 
